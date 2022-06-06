@@ -69,7 +69,7 @@ export default function JokesRoute() {
                 </li>
               ))}
             </ul>
-            <Link to="new" className="button">
+            <Link to="new" prefetch="intent" className="button">
               Add your own
             </Link>
           </div>
