@@ -1,14 +1,36 @@
-import type { Joke } from "@prisma/client";
-import type { ActionFunction, LoaderFunction } from "@remix-run/node";
+import type {
+  ActionFunction,
+  LoaderFunction,
+  MetaFunction,
+} from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Link, useLoaderData, useCatch, useParams } from "@remix-run/react";
+import type { Joke } from "@prisma/client";
 
 import { db } from "~/utils/db.server";
-import { requireUserId } from "~/utils/session.server";
+import { getUserId, requireUserId } from "~/utils/session.server";
 
-type LoaderData = { joke: Joke };
+export const meta: MetaFunction = ({
+  data,
+}: {
+  data: LoaderData | undefined;
+}) => {
+  if (!data) {
+    return {
+      title: "No joke",
+      description: "No joke found",
+    };
+  }
+  return {
+    title: `"${data.joke.name}" joke`,
+    description: `Enjoy the "${data.joke.name}" joke and much more`,
+  };
+};
 
-export const loader: LoaderFunction = async ({ params }) => {
+type LoaderData = { joke: Joke; isOwner: boolean };
+
+export const loader: LoaderFunction = async ({ request, params }) => {
+  const userId = await getUserId(request);
   const joke = await db.joke.findUnique({
     where: { id: params.jokeId },
   });
@@ -17,7 +39,10 @@ export const loader: LoaderFunction = async ({ params }) => {
       status: 404,
     });
   }
-  const data: LoaderData = { joke };
+  const data: LoaderData = {
+    joke,
+    isOwner: userId === joke.jokesterId,
+  };
   return json(data);
 };
 
@@ -54,12 +79,14 @@ export default function JokeRoute() {
       <p>Here's your hilarious joke:</p>
       <p>{data.joke.content}</p>
       <Link to=".">{data.joke.name} Permalink</Link>
-      <form method="post">
-        <input type="hidden" name="_method" value="delete" />
-        <button type="submit" className="button">
-          Delete
-        </button>
-      </form>
+      {data.isOwner ? (
+        <form method="post">
+          <input type="hidden" name="_method" value="delete" />
+          <button type="submit" className="button">
+            Delete
+          </button>
+        </form>
+      ) : null}
     </div>
   );
 }
@@ -95,8 +122,7 @@ export function CatchBoundary() {
   }
 }
 
-export function ErrorBoundary({ error }: { error: Error }) {
-  console.error(error);
+export function ErrorBoundary() {
   const { jokeId } = useParams();
   return (
     <div className="error-container">{`There was an error loading joke by the id ${jokeId}. Sorry.`}</div>
